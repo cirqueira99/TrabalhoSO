@@ -9,14 +9,13 @@
 int contPostIt=0;
 
 sem_t mutex; // Semaforo binario para garantir exclusao mutua na regiao critica
-sem_t n_vagas; // Semaforo para controlar as posicoes vazias no buffer
-sem_t cheio; // Semaforo para controlar as posicoes preenchidas no buffer
+sem_t n_vagas; // Semaforo para controlar as posicoes vazias no mochila
+sem_t cheio; // Semaforo para controlar as posicoes preenchidas no mochila
 
 int mochila[N]; // Armazena os dados produzidos ou consumidos
 int proxPosCheia; // Proxima posicao cheia
 int proxPosVazia; // Proxima posicao vazia
 
-// Controla a quantidade de dados presentes no buffer
 // Prototipos das funcoes para o produtor e consumidor
 void *usuario(void *);
 void *pombo(void *);
@@ -28,10 +27,10 @@ int main(void){
 	scanf("%d",&tam);
     printf("\n");
 
-	// Mensagens alearótias
+	//Define a semente da funcao geradora de numeros aleatorios
 	srand(time(NULL));
 
-	// inicializando  as variáveis
+	// Inicializando  as variáveis
 	proxPosCheia = 0;
 	proxPosVazia = 0;
 
@@ -40,11 +39,11 @@ int main(void){
 	sem_init(&n_vagas, 0, N);
 	sem_init(&cheio, 0, 0);
 
-	// indentificadores das treads usurario e pompo
+	// Indentificadores das threads usurario e pompo
 	pthread_t thdU[tam]; // criação de um vetor de usuários
  	pthread_t thdP;
 
-	// Inicializa os semaforos
+	// Inicializa as threads
 	for (int i = 0; i < tam; ++i){
 		pthread_create(&thdU[i], 0, (void *) usuario, NULL); // semáforos usuários
     }
@@ -61,6 +60,7 @@ int main(void){
 	exit(0);	
 }
 
+// Metodo que produz item
 int produz_item( ){
 	int val;
 	val = rand() % 100;
@@ -69,61 +69,62 @@ int produz_item( ){
 	return val;
 }
 
-//Metodo que a realiza a insercao do dado no buffer
+//Metodo que a realiza a insercao do dado na mochila
 void ColaPostIt( int val ){
 	if( contPostIt < N ){
 		mochila[proxPosVazia] = val;
 		/* A utilizacao da divisao em modulo implementa um comportamento
-		* circular da utilizacao do buffer, ou seja, quando o contador
+		* circular da utilizacao da mochila, ou seja, quando o contador
 		* chegar no valor de N (N % N = 0) o valor da variavel voltara
-		* ao inicio do buffer.
+		* ao inicio da mochila.
 		*/
 		proxPosVazia = ( proxPosVazia + 1 ) % N;
 	}
 }
 
+// Metodo que faz usuario dormir
 void dorme_aleatotio( int item ){
 	sleep( item%3 );
 }
 
-int contt = 0;
 void *usuario( void *p_arg ){
-	//printf("contt= %d\n", contt);
-	//contt++;
 	int item;
-	//int pid = getpid();
+
 	register int i=0;
 
 	while(1){
 		item = produz_item( );
 		
+		// É dado down em n_vagas e mutex
 		sem_wait( &n_vagas );
 		sem_wait( &mutex );
 
+		// Faz usuário dormir
 		dorme_aleatotio(item);
 
+		// Coloca item na mochila
 		ColaPostIt( item );
 		contPostIt++;
 
-		//printf(" Espaço na Mochila => %d\n", (N - contPostIt) + 1);
-
 		if( contPostIt == N ){
-			printf("####### Mochila Cheia!! #######\n");	
+			printf("####### Mochila Cheia!! #######\n");
+			
+			// É dado up em heio	
 			sem_post( &cheio );			
 		}
-
+		// É dado up em mutex
 		sem_post( &mutex );
 	}
 
 	pthread_exit( NULL );
 }
 
-
+// Metodo que faz pombo levar a mochila(dormir)
 void leva_mochila_ate_B_e_volta( int item ){
 	sleep( item%3 );
 }
 
-// Metodo que realiza a retirada do dado do buffer
+// Metodo que realiza a retirada do dado da mochila
 int remove_item(){
 	int val;
 	
@@ -140,19 +141,23 @@ void *pombo( void *p_arg ){
 	register int i=0;
 
 	while(1){
+		// É dado down em cheio e mutex
 		sem_wait( &cheio );
 		sem_wait( &mutex );
 
+		// Faz pombo dormir
 		leva_mochila_ate_B_e_volta( item );
-
 		contPostIt = 0;
-
+		
 		for ( int i = 0; i < N; i++ ){
 			printf("\nAdic. msg: %d", i);
 			item = remove_item();
+			
+			// É dado up em n_vagas
 			sem_post( &n_vagas );
 		}
-
+		
+		// É dado up em mutex
 		sem_post( &mutex );
 	}
 	pthread_exit( NULL );
